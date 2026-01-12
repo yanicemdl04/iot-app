@@ -1,0 +1,190 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ATHLETE
+  COACH
+  ADMIN
+}
+
+enum ActivityType {
+  RUNNING
+  CYCLING
+  WALKING
+  SWIMMING
+  GYM
+  OTHER
+}
+
+enum GoalStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  firstName     String
+  lastName      String
+  role          UserRole  @default(ATHLETE)
+  dateOfBirth   DateTime?
+  phoneNumber   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  sessions      Session[]
+  activities    Activity[]
+  goals         Goal[]
+  statistics    Statistics[]
+  coachedUsers  User[]    @relation("CoachAthlete")
+  coachId       String?
+  coach         User?     @relation("CoachAthlete", fields: [coachId], references: [id])
+
+  @@map("users")
+}
+
+model Session {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startTime     DateTime  @default(now())
+  endTime       DateTime?
+  duration      Int?      // en secondes
+  activityType  ActivityType?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  sensorData    SensorData[]
+  activities    Activity[]
+
+  @@map("sessions")
+}
+
+model SensorData {
+  id            String    @id @default(uuid())
+  sessionId     String
+  session       Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  // Données des capteurs
+  heartRate     Float?    // bpm
+  temperature   Float?    // °C
+  spo2          Float?    // % (saturation en oxygène)
+  
+  // Accéléromètre
+  accelX        Float?
+  accelY        Float?
+  accelZ        Float?
+  
+  // Gyroscope
+  gyroX         Float?
+  gyroY         Float?
+  gyroZ         Float?
+  
+  // GPS
+  latitude      Float?
+  longitude     Float?
+  altitude      Float?
+  
+  // ECG (électrocardiogramme)
+  ecgValue      Float?
+  
+  // Activité
+  steps         Int?      @default(0)
+  calories      Float?    @default(0)
+  
+  // État du dispositif
+  battery       Float?    // %
+  
+  timestamp     DateTime  @default(now())
+  
+  @@index([sessionId])
+  @@index([timestamp])
+  @@map("sensor_data")
+}
+
+model Activity {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId     String?
+  session       Session?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  activityType  ActivityType
+  name          String
+  description   String?
+  startTime     DateTime
+  endTime       DateTime?
+  duration      Int?      // en secondes
+  distance      Float?    // en mètres
+  averageSpeed  Float?    // en m/s
+  maxSpeed      Float?    // en m/s
+  averageHeartRate Float?
+  maxHeartRate  Float?
+  calories      Float?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([startTime])
+  @@map("activities")
+}
+
+model Goal {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  targetValue   Float
+  currentValue  Float     @default(0)
+  unit          String    // "km", "steps", "calories", etc.
+  targetDate    DateTime
+  status        GoalStatus @default(PENDING)
+  activityType  ActivityType?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("goals")
+}
+
+model Statistics {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period        String    // "daily", "weekly", "monthly", "yearly"
+  startDate     DateTime
+  endDate       DateTime
+  
+  // Statistiques agrégées
+  totalDistance Float?    @default(0)
+  totalDuration Int?      @default(0) // en secondes
+  totalCalories Float?    @default(0)
+  totalSteps    Int?      @default(0)
+  averageHeartRate Float?
+  maxHeartRate  Float?
+  activitiesCount Int?    @default(0)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([userId, period, startDate])
+  @@index([userId])
+  @@index([startDate])
+  @@map("statistics")
+}
